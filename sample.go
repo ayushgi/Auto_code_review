@@ -71,3 +71,92 @@ func bookHandler(w http.ResponseWriter, r *http.Request) {
 
 	http.Error(w, "Book Not Found", http.StatusNotFound)
 }
+
+
+package main
+
+import (
+	"net/http"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
+)
+
+type User struct {
+	ID    int    `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+var users = []User{
+	{ID: 1, Name: "Alice", Email: "alice@example.com"},
+	{ID: 2, Name: "Bob", Email: "bob@example.com"},
+}
+
+func main() {
+	router := gin.Default()
+
+	router.GET("/users", getUsers)
+	router.POST("/users", createUser)
+	router.GET("/users/:id", getUserByID)
+	router.PUT("/users/:id", updateUser)
+	router.DELETE("/users/:id", deleteUser)
+
+	router.Run(":8080")
+}
+
+func getUsers(c *gin.Context) {
+	c.JSON(http.StatusOK, users)
+}
+
+func createUser(c *gin.Context) {
+	var newUser User
+	if err := c.BindJSON(&newUser); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	newUser.ID = len(users) + 1
+	users = append(users, newUser)
+	c.JSON(http.StatusCreated, newUser)
+}
+
+func getUserByID(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	for _, user := range users {
+		if user.ID == id {
+			c.JSON(http.StatusOK, user)
+			return
+		}
+	}
+	c.JSON(http.StatusNotFound, gin.H{"message": "User not found"})
+}
+
+func updateUser(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	for i, user := range users {
+		if user.ID == id {
+			var updatedUser User
+			if err := c.BindJSON(&updatedUser); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			updatedUser.ID = id
+			users[i] = updatedUser
+			c.JSON(http.StatusOK, updatedUser)
+			return
+		}
+	}
+	c.JSON(http.StatusNotFound, gin.H{"message": "User not found"})
+}
+
+func deleteUser(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	for i, user := range users {
+		if user.ID == id {
+			users = append(users[:i], users[i+1:]...)
+			c.JSON(http.StatusOK, gin.H{"message": "User deleted"})
+			return
+		}
+	}
+	c.JSON(http.StatusNotFound, gin.H{"message": "User not found"})
+}
