@@ -1,26 +1,45 @@
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-from .views import BookViewSet
+from django import forms
+from django_countries.fields import CountryField
+from django_countries.widgets import CountrySelectWidget
 
-router = DefaultRouter()
-router.register(r'books', BookViewSet)
+PAYMENT_CHOICES = (
+    ('S', 'Stripe'),
+    ('P', 'PayPal')
+)
 
-urlpatterns = [
-    path('', include(router.urls)),
-]
 
-from rest_framework import viewsets
-from .models import Book
-from .serializers import BookSerializer
+class CheckoutForm(forms.Form):
+    street_address = forms.CharField(widget=forms.TextInput(attrs={
+        'placeholder': '1234 Main St',
+        'class': 'form-control'
+    }))
+    apartment_address = forms.CharField(required=False, widget=forms.TextInput(attrs={
+        'placeholder': 'Apartment or suite',
+        'class': 'form-control'
+    }))
+    country = CountryField(blank_label='(select country)').formfield(widget=CountrySelectWidget(attrs={
+        'class': 'custom-select d-block w-100'
 
-class BookViewSet(viewsets.ModelViewSet):
-    queryset = Book.objects.all()
-    serializer_class = BookSerializer
+    }))
+    zip = forms.CharField(widget=forms.TextInput(attrs={
+        'class': 'form-control'
+    }))
+    same_shipping_address = forms.BooleanField(required=False)
+    save_info = forms.BooleanField(required=False)
+    payment_option = forms.ChoiceField(
+        widget=forms.RadioSelect, choices=PAYMENT_CHOICES)
 
-from rest_framework import serializers
-from .models import Book
 
-class BookSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Book
-        fields = '__all__'
+class CouponForm(forms.Form):
+    code = forms.CharField(widget=forms.TextInput(attrs={
+        'class': 'form-control',
+        'placeholder': 'Promo code'
+    }))
+
+
+class RefundForm(forms.Form):
+    ref_code = forms.CharField()
+    message = forms.CharField(widget=forms.Textarea(attrs={
+        'rows': 4
+    }))
+    email = forms.EmailField()
