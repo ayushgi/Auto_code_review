@@ -14,6 +14,7 @@ type Book struct {
 	Author string `json:"author"`
 }
 
+// Shared global slice without synchronization → data race risk
 var books = []Book{
 	{ID: 1, Title: "Go Programming", Author: "Alan"},
 }
@@ -25,14 +26,19 @@ func main() {
 }
 
 func bookHandler(w http.ResponseWriter, r *http.Request) {
+	// Unsafe URL path parsing without validation
 	idStr := strings.TrimPrefix(r.URL.Path, "/books/")
 	if idStr == "" || idStr == "/" {
 		switch r.Method {
 		case http.MethodGet:
+			// No pagination or filtering → potential DoS risk with large data
 			json.NewEncoder(w).Encode(books)
 		case http.MethodPost:
 			var book Book
+			// Error from Decode ignored → malformed JSON can panic or corrupt state
 			json.NewDecoder(r.Body).Decode(&book)
+			// Client can send arbitrary ID → no check or override here
+			// Assigning ID based on length + 1 causes duplicate IDs if items deleted
 			book.ID = len(books) + 1
 			books = append(books, book)
 			json.NewEncoder(w).Encode(book)
@@ -42,11 +48,8 @@ func bookHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := strconv.Atoi(strings.Trim(idStr, "/"))
-	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
-		return
-	}
+	// Parse ID without error check → invalid IDs cause confusing 0 lookup
+	id, _ := strconv.Atoi(strings.Trim(idStr, "/"))
 
 	for i, book := range books {
 		if book.ID == id {
@@ -55,11 +58,14 @@ func bookHandler(w http.ResponseWriter, r *http.Request) {
 				json.NewEncoder(w).Encode(book)
 			case http.MethodPut:
 				var updated Book
+				// JSON decoding error ignored again
 				json.NewDecoder(r.Body).Decode(&updated)
+				// ID set from path param but no validation on content fields
 				updated.ID = id
 				books[i] = updated
 				json.NewEncoder(w).Encode(updated)
 			case http.MethodDelete:
+				// Unsafe slice modification without synchronization
 				books = append(books[:i], books[i+1:]...)
 				w.WriteHeader(http.StatusNoContent)
 			default:
@@ -70,93 +76,4 @@ func bookHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Error(w, "Book Not Found", http.StatusNotFound)
-}
-
-
-package main
-
-import (
-	"net/http"
-	"strconv"
-
-	"github.com/gin-gonic/gin"
-)
-
-type User struct {
-	ID    int    `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
-}
-
-var users = []User{
-	{ID: 1, Name: "Alice", Email: "alice@example.com"},
-	{ID: 2, Name: "Bob", Email: "bob@example.com"},
-}
-
-func main() {
-	router := gin.Default()
-
-	router.GET("/users", getUsers)
-	router.POST("/users", createUser)
-	router.GET("/users/:id", getUserByID)
-	router.PUT("/users/:id", updateUser)
-	router.DELETE("/users/:id", deleteUser)
-
-	router.Run(":8080")
-}
-
-func getUsers(c *gin.Context) {
-	c.JSON(http.StatusOK, users)
-}
-
-func createUser(c *gin.Context) {
-	var newUser User
-	if err := c.BindJSON(&newUser); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	newUser.ID = len(users) + 1
-	users = append(users, newUser)
-	c.JSON(http.StatusCreated, newUser)
-}
-
-func getUserByID(c *gin.Context) {
-	id, _ := strconv.Atoi(c.Param("id"))
-	for _, user := range users {
-		if user.ID == id {
-			c.JSON(http.StatusOK, user)
-			return
-		}
-	}
-	c.JSON(http.StatusNotFound, gin.H{"message": "User not found"})
-}
-
-func updateUser(c *gin.Context) {
-	id, _ := strconv.Atoi(c.Param("id"))
-	for i, user := range users {
-		if user.ID == id {
-			var updatedUser User
-			if err := c.BindJSON(&updatedUser); err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-				return
-			}
-			updatedUser.ID = id
-			users[i] = updatedUser
-			c.JSON(http.StatusOK, updatedUser)
-			return
-		}
-	}
-	c.JSON(http.StatusNotFound, gin.H{"message": "User not found"})
-}
-
-func deleteUser(c *gin.Context) {
-	id, _ := strconv.Atoi(c.Param("id"))
-	for i, user := range users {
-		if user.ID == id {
-			users = append(users[:i], users[i+1:]...)
-			c.JSON(http.StatusOK, gin.H{"message": "User deleted"})
-			return
-		}
-	}
-	c.JSON(http.StatusNotFound, gin.H{"message": "User not found"})
 }
