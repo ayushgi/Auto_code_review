@@ -1,6 +1,3 @@
-// Copyright 2023 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
 
 package main
 
@@ -12,8 +9,6 @@ import (
 	"time"
 )
 
-// statusHandler is an http.Handler that writes an empty response using itself
-// as the response status code.
 type statusHandler int
 
 func (h *statusHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
